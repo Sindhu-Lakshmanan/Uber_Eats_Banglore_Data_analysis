@@ -7,14 +7,207 @@ conn = sqlite3.connect("uber_eats.db")
 st.set_page_config(
     page_title="Uber Eats Dashboard",
     layout="wide")
+st.title("🍔 Uber Eats Bangalore Dashboard")
+
+
+# KPI Queries
+
+total_restaurants = pd.read_sql(
+    "SELECT COUNT(DISTINCT name) AS unique_restaurants FROM restaurants",conn
+).iloc[0, 0]
+
+avg_rating = pd.read_sql(
+    "SELECT ROUND(AVG(rate),2) AS avg_rating FROM restaurants",
+    conn
+).iloc[0, 0]
+
+avg_cost = pd.read_sql(
+    'SELECT ROUND(AVG("approx_cost(for two people)"),0) AS avg_cost FROM restaurants',
+    conn
+).iloc[0, 0]
+
+total_locations = pd.read_sql(
+    "SELECT COUNT(DISTINCT location) AS total_locations FROM restaurants",
+    conn
+).iloc[0, 0]
+
+total_orders = pd.read_sql(
+    "SELECT COUNT(*) AS total_orders FROM Order_details",
+    conn
+).iloc[0, 0]
+
+total_revenue = pd.read_sql(
+    "SELECT ROUND(SUM(order_value),2) AS total_revenue FROM Order_details",
+    conn
+).iloc[0, 0]
+
+avg_order_value = pd.read_sql(
+    "SELECT ROUND(AVG(order_value),2) AS avg_order_value FROM Order_details",
+    conn
+).iloc[0, 0]
+
+avg_restaurant_revenue = pd.read_sql(
+    """
+    SELECT
+    ROUND(
+        (SELECT SUM(order_value) FROM Order_details) * 1.0 /
+        (SELECT COUNT(DISTINCT name) FROM restaurants),
+        2
+    ) AS avg_restaurant_revenue
+    """,
+    conn
+).iloc[0,0]
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Restaurants", f"{total_restaurants:,}")
+col2.metric("Avg Rating", avg_rating)
+col3.metric("Avg Cost for Two", f"₹{avg_cost:,.0f}")
+col4.metric("Locations", total_locations)
+
+col5, col6, col7, col8 = st.columns(4)
+
+col5.metric("Total Orders", f"{total_orders:,}")
+col6.metric("Total Revenue", f"₹{total_revenue:,.0f}")
+col7.metric("Avg Order Value", f"₹{avg_order_value}")
+col8.metric("Revenue per Restaurant", f"₹{avg_restaurant_revenue:,.0f}")
+st.divider()
+st.subheader("🔎 Explore Restaurants")
+st.caption("Results are retrieved dynamically from the SQLite database using SQL filters.")
+# -----------------------------
+# Get filter values
+# -----------------------------
+
+locations = pd.read_sql_query(
+    "SELECT DISTINCT location FROM restaurants WHERE location IS NOT NULL ORDER BY location",
+    conn
+)["location"].tolist()
+
+cuisines = pd.read_sql_query(
+    "SELECT DISTINCT cuisines FROM restaurants WHERE cuisines IS NOT NULL ORDER BY cuisines",
+    conn
+)["cuisines"].tolist()
+
+# -----------------------------
+# Filters
+# -----------------------------
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    selected_location = st.selectbox(
+    "📍 Location",
+    ["All"] + locations
+)
+
+with col2:
+    selected_cuisine = st.selectbox(
+    "🍽️ Cuisine",
+    ["All"] + cuisines
+)
+
+with col3:
+ online_order = st.selectbox(
+    "🛒 Online Order",
+    ["All", "Yes", "No"]
+)
+
+col4, col5 = st.columns(2)
+
+with col4:
+    book_table = st.selectbox(
+    "🪑 Table Booking",
+    ["All", "Yes", "No"]
+)
+
+with col5:
+    min_rating = st.slider(
+    "⭐ Minimum Rating",
+    0.0,
+    5.0,
+    0.0,
+    0.1
+)
+# -----------------------------
+# SQL Query
+# -----------------------------
+
+query = """
+SELECT
+    location,
+    rest_type,
+    cuisines,
+    rate,
+    votes,
+    online_order,
+    book_table,
+    phone,
+    dish_liked
+FROM restaurants
+WHERE 1=1
+"""
+
+params = []
+
+if selected_location != "All":
+    query += " AND location = ?"
+    params.append(selected_location)
+
+if selected_cuisine != "All":
+    query += " AND cuisines LIKE ?"
+    params.append("%" + selected_cuisine + "%")
+
+if online_order != "All":
+    query += " AND online_order = ?"
+    params.append(online_order)
+
+if book_table != "All":
+    query += " AND book_table = ?"
+    params.append(book_table)
+
+if min_rating > 0:
+    query += " AND rate >= ?"
+    params.append(min_rating)
+
+query += " ORDER BY rate DESC"
+
+# -----------------------------
+# Execute query
+# -----------------------------
+
+df = pd.read_sql_query(
+    query,
+    conn,
+    params=params
+)
+
+st.subheader("Filtered Restaurant Data")
+
+st.write(f"Restaurants Found: {len(df):,}")
+
+st.dataframe(
+    df,
+    use_container_width=True,
+    hide_index=True
+)
+
+
+
+st.markdown("""
+
+### Project Overview
+This dashboard analyzes Bangalore restaurant and order data to identify
+customer preferences, revenue trends, location performance, pricing strategies,
+and restaurant onboarding opportunities for Uber Eats.
+""")
+
 
 
 #1.Which Bangalore locations have the highest average restaurant ratings?
 #Business Value: Identifies premium-performing areas suitable for brand positioning and new partner onboarding.
 
 query1 = """
-SELECT LOCATION , round(AVG(RATE),2) as Avg_rating FROM restaurants
-group by LOCATION
+SELECT location , round(AVG(RATE),2) as Avg_rating FROM restaurants
+group by location
 ORDER BY Avg_rating desc
 LIMIT 10
 """
@@ -50,7 +243,7 @@ fig1.update_layout(
 # 2.Which locations are over-saturated with restaurants?
 query2 = """
 SELECT location,
-       COUNT(*) AS restaurant_count
+    COUNT(*) AS restaurant_count
 FROM restaurants
 GROUP BY location
 ORDER BY restaurant_count DESC
@@ -79,7 +272,7 @@ fig2.update_layout(
     xaxis=dict(range=[600,1900]),
     #yaxis=dict(range=[600,2000]),
     yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# xaxis=dict(tickangle=-90),
     yaxis_title="",
     xaxis_title="<b>restaurant_count</b>"
 )
@@ -115,8 +308,8 @@ fig3.update_layout(
     
     #xaxis=dict(range=[600,1900]),
     yaxis=dict(range=[3.7,4]),
-   # yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# yaxis=dict(autorange="reversed"),
+# xaxis=dict(tickangle=-90),
     yaxis_title="Rating",
     xaxis_title="<b>Online_order </b>"
 )
@@ -138,7 +331,7 @@ fig4 = px.bar(
     y="Avg_rating",
     #orientation="h",
     text="Avg_rating",
-    title="Corelation between Table booking and Rating",
+    title="Correlation between Table booking and Rating",
     color_discrete_sequence=["#d25d4b"]
 )
 
@@ -152,8 +345,8 @@ fig4.update_layout(
     
     #xaxis=dict(range=[600,1900]),
     yaxis=dict(range=[3.5,4.3]),
-   # yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# yaxis=dict(autorange="reversed"),
+# xaxis=dict(tickangle=-90),
     yaxis_title="<b>Rating</b>",
     xaxis_title="<b>Table booking </b>"
 )
@@ -166,7 +359,7 @@ SELECT
     WHEN "approx_cost(for two people)" <= 400 THEN 'Low'
     WHEN "approx_cost(for two people)" <= 1000 THEN 'Mid'
     ELSE 'Premium'
-   END as price_segment,
+END as price_segment,
 
     ROUND(AVG(rate),2) AS avg_rating,
     COUNT(*) AS restaurant_count
@@ -200,21 +393,23 @@ fig5.update_layout(
     
     #xaxis=dict(range=[600,1900]),
     #yaxis=dict(range=[3.5,4.3]),
-   # yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# yaxis=dict(autorange="reversed"),
+# xaxis=dict(tickangle=-90),
     yaxis_title="<b>Average rating</b>",
     xaxis_title="<b>price segment </b>"
 )
 
 
 #6.How do low, mid, and premium-priced restaurants perform in terms of ratings?
+
+
 query6 = """
 SELECT
     CASE
     WHEN "approx_cost(for two people)" <= 400 THEN 'Low'
     WHEN "approx_cost(for two people)" <= 1000 THEN 'Mid'
     ELSE 'Premium'
-   END as price_segment,
+END as price_segment,
 
     ROUND(AVG(rate),2) AS avg_rating,
     COUNT(*) AS restaurant_count
@@ -250,7 +445,7 @@ st.sidebar.title("Uber Eats Dashboard")
 
 #11.Which locations are ideal for premium restaurant onboarding?
 
-query11='''SELECT
+query11='''SELECT   
     location,
     ROUND(AVG(rate),2) AS avg_rating,
     ROUND(AVG("approx_cost(for two people)"),2) AS avg_cost,
@@ -284,7 +479,7 @@ fig11.update_layout(
 #12.Which locations show high demand but lower average ratings?
 
 query12 = """
- SELECT
+SELECT
     location,
     ROUND(AVG(rate),2) AS avg_rating,
     COUNT(*) AS restaurant_count
@@ -297,7 +492,7 @@ ORDER BY avg_rating , restaurant_count ASC;"""
 q12 = pd.read_sql(query12, conn)
 
 query12_sub = """
- SELECT
+SELECT
     MIN(avg_rating) AS min_rating,
     MAX(avg_rating) AS max_rating,
     MIN(restaurant_count) AS min_count,
@@ -362,7 +557,7 @@ fig13_avg = px.bar(
 )
 
 fig13_avg.update_traces(textposition="outside",showlegend=False)
-  
+
 fig13_avg.update_layout(
     height=500,
     width=600,
@@ -371,8 +566,8 @@ fig13_avg.update_layout(
     
     #xaxis=dict(range=[600,1900]),
     #yaxis=dict(range=[3.5,4.3]),
-   # yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# yaxis=dict(autorange="reversed"),
+# xaxis=dict(tickangle=-90),
     yaxis_title="<b>Average rating</b>",
     xaxis_title="<b>Online order / Book table </b>"
 )
@@ -389,7 +584,7 @@ fig13_count = px.bar(
 )
 
 fig13_count.update_traces(textposition="outside",showlegend=False)
-  
+
 fig13_count.update_layout(
     height=500,
     width=600,
@@ -398,8 +593,8 @@ fig13_count.update_layout(
     
     #xaxis=dict(range=[600,1900]),
     #yaxis=dict(range=[3.5,4.3]),
-   # yaxis=dict(autorange="reversed"),
-   # xaxis=dict(tickangle=-90),
+# yaxis=dict(autorange="reversed"),
+# xaxis=dict(tickangle=-90),
     yaxis_title="<b>Restaurant count</b>",
     xaxis_title="<b>Online order / Book table </b>"
 )
@@ -430,7 +625,7 @@ SELECT
     MAX("approx_cost(for two people)") AS cost
 FROM restaurants
 WHERE "approx_cost(for two people)" > 400
-  AND "approx_cost(for two people)" <= 1000
+AND "approx_cost(for two people)" <= 1000
 GROUP BY name, location
 ORDER BY rate DESC, votes DESC
 LIMIT 5;"""
@@ -524,7 +719,7 @@ Order_query1="""
 select payment_method,count(*) as total_count
 from Order_details
 group by payment_method	
-order by total_count"""
+order by total_count desc"""
 Order_q1=pd.read_sql(Order_query1,conn)
 
 
@@ -625,7 +820,7 @@ SELECT
     COUNT(*) AS total_count
 FROM Order_details
 GROUP BY day_name
-ORDER BY total_count DESC
+ORDER BY total_count 
 """
 Order_q4 = pd.read_sql(Order_query4, conn)
 
@@ -721,7 +916,7 @@ restaurant_question = st.sidebar.selectbox(
 )
 
 order_question = st.sidebar.selectbox(
-    "Select Question",
+    "Order Analytics    ",
     [
         "Select",
         "O1 - Most Used Payment Method",
@@ -773,18 +968,27 @@ elif restaurant_question == "Q2 - Over-Saturated Locations":
     """
     **Answer:**   Koramangala 5th Block has higher restaurant counts of 1782 restaurants 
 
-    **Business Value:** Uber eats can consider other less densed location with high demand for restaurant expansion
+    **Business Value:** Uber eats can consider other less dense location with high demand for restaurant expansion
     """)
         
 elif restaurant_question =="Q3 - Online Ordering Impact":
-    st.header("3. Does online ordering improve restaurant ratings?")
-    st.plotly_chart(fig3,width="stretch")
-    st.subheader("Business Insight")
-    st.write(
-    """
-    **Answer:**   The data shows that Restaurant with no online ordering option has higher rating
+    
+    st.header("Q3. Does online ordering improve restaurant ratings?")
 
-    **Business Value:** This shows that customer like good ambience and table booking facility more than online ordering
+    col1, col2 = st.columns([2, 3])
+
+    with col1:
+        st.dataframe(q3, hide_index=True, use_container_width=True)
+
+    with col2:
+        st.plotly_chart(fig3, use_container_width=True)
+
+    st.subheader("💡 Business Insight")
+    st.write("""
+    **Answer:** Restaurants without online ordering have a higher average rating in this dataset.
+
+    **Business Value:** This indicates an association between online-order availability
+    and restaurant ratings, but it does not establish that online ordering causes the rating difference.
     """)
 
 elif restaurant_question == "Q4 - Table Booking Impact":
@@ -810,10 +1014,10 @@ elif restaurant_question == "Q5 - Best Price Range":
     with col2:
         st.plotly_chart(fig5,width="stretch")
     st.info("""
-       Price Segment Definition:
-          • Low: ≤ ₹300
-          • Mid: ₹301–₹700
-          • Premium: > ₹700
+    Price Segment Definition:
+        • Low: ≤ ₹400
+        • Mid: ₹401–₹1000
+        • Premium: > ₹1000
 """)
     st.subheader("Business Insight")
     st.write(
@@ -831,18 +1035,17 @@ elif restaurant_question == "Q6 - Price Segment Performance":
     with col2:
         st.plotly_chart(fig6,width="stretch")
     st.info("""
-       Price Segment Definition:
-          • Low: ≤ ₹300
-          • Mid: ₹301–₹700
-          • Premium: > ₹700""")
+    Price Segment Definition:
+        • Low: ≤ ₹400
+        • Mid: ₹401–₹1000
+        • Premium: > ₹1000""")
     st.subheader("Business Insight")
-    st.write(
-    """
-    **Answer:**   Premium segment performed well than any other segment, followed by mid and low
+    st.write("""
+**Answer:** The Premium segment has the highest average rating, followed by the Mid and Low segments.
 
-    **Business Value:** Even though mid segment restaurant counts are higher than premium and low segment restaurant. It performed less than any other segment in terms of restaurant counts
-    we should improve premium and low segment hotel counts, if we plan any expansion
-    """)
+**Business Value:** Higher-priced restaurants show stronger average customer ratings in this dataset. 
+This can help Uber Eats identify locations and restaurant segments where premium positioning may be suitable.""")
+
 elif restaurant_question == "Q11 - Premium Onboarding Locations":
     st. header("Which locations are ideal for premium restaurant onboarding?")
     col1,col2=st.columns([2,3])
@@ -876,7 +1079,7 @@ elif restaurant_question == "Q12 - High Demand Low Rating Areas":
     **Answer:**   Marathahalli has rating of 3.73 with 680 restaurants
 
     **Business Value:** Even with 680 restaurants, Marathahalli has performed low. Here, I have filtered restaurant counts greater than 500 
-    for idendifying the high demand and average rating. 
+    for identifying the high demand and average rating. 
     """)
 elif restaurant_question == "Q13 - Online Order + Table Booking":
     st. header("Do restaurants offering both online ordering and table booking perform better?")
@@ -893,7 +1096,7 @@ elif restaurant_question == "Q13 - Online Order + Table Booking":
     **Answer:**   Yes , it performs better in terms of rating
 
     **Business Value:** When we look at the restaurant count, online ordering restaurants with no table booking option has higher restaurant count .
-    Since table booking has more preference than online order, we should improve table booking hotels more 
+    Restaurants with table booking show higher average ratings.so we should improve table booking hotels more 
     """)
     
     
@@ -915,18 +1118,18 @@ elif restaurant_question == "Q15 - Top Performers by Price Segment":
         st.dataframe(q15_mid[["restaurant_name","rate","votes"]],hide_index=True)
     col5,col6=st.columns([2,2])
     with col5:
-       
+    
         st.plotly_chart(fig15_premium,width="stretch")
     with col6:
         st. subheader("Top performers of Premium segment ")
-        st.dataframe(q15_premium,hide_index="True")
+        st.dataframe(q15_premium,hide_index=True)
     st.subheader("Business Insight")
     st.write(
     """
     **Answer:**  Milano Ice Cream (Indiranagar) in low segment,  
-                 SantÃÂÃÂÃÂÃÂ... (Indiranagar) in mid segment , 
-                 Byg Brewski Brewing Company(Sarjapur Road ) in premium segment,  
-                 performed better
+                SantÃÂÃÂÃÂÃÂ... (Indiranagar) in mid segment , 
+                Byg Brewski Brewing Company(Sarjapur Road ) in premium segment,  
+                performed better
 
 
     **Business Value:** Hotels from Indira nagar performed well in low and mid segment .But in premium segment hotel from Sarjapur road won
@@ -955,7 +1158,7 @@ if order_question=="O1 - Most Used Payment Method":
     """
 )
 
- 
+
 elif order_question== "O2 - Highest Order Volume Restaurant":
     st. header("Which restaurant has Highest order volume ?")
     col1, col2 = st.columns([2,4])
@@ -970,7 +1173,7 @@ elif order_question== "O2 - Highest Order Volume Restaurant":
     """
     **Answer:** Cake cafe and Andhra Grills has the highest order count of 19 .
 
-    **Business Value:** These restaurants has more reputation around the customers making it highest order volumen restaurant
+    **Business Value:** These restaurants has more reputation around the customers making it highest order volume restaurant
     """
     )
 
@@ -1030,11 +1233,3 @@ elif order_question == "O5 - Highest Revenue Day of Week":
     **Business Value:** Even though the order count on Thursday is high . Revenue generation is high on Monday only.
     """)
     
-
-
-
- 
-
-
-
-
