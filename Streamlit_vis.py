@@ -57,138 +57,7 @@ avg_restaurant_revenue = pd.read_sql(
     """,
     conn
 ).iloc[0,0]
-col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("Restaurants", f"{total_restaurants:,}")
-col2.metric("Avg Rating", avg_rating)
-col3.metric("Avg Cost for Two", f"₹{avg_cost:,.0f}")
-col4.metric("Locations", total_locations)
-
-col5, col6, col7, col8 = st.columns(4)
-
-col5.metric("Total Orders", f"{total_orders:,}")
-col6.metric("Total Revenue", f"₹{total_revenue:,.0f}")
-col7.metric("Avg Order Value", f"₹{avg_order_value}")
-col8.metric("Revenue per Restaurant", f"₹{avg_restaurant_revenue:,.0f}")
-st.divider()
-st.subheader("🔎 Explore Restaurants")
-st.caption("Results are retrieved dynamically from the SQLite database using SQL filters.")
-# -----------------------------
-# Get filter values
-# -----------------------------
-
-locations = pd.read_sql_query(
-    "SELECT DISTINCT location FROM restaurants WHERE location IS NOT NULL ORDER BY location",
-    conn
-)["location"].tolist()
-
-cuisines = pd.read_sql_query(
-    "SELECT DISTINCT cuisines FROM restaurants WHERE cuisines IS NOT NULL ORDER BY cuisines",
-    conn
-)["cuisines"].tolist()
-
-# -----------------------------
-# Filters
-# -----------------------------
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    selected_location = st.selectbox(
-    "📍 Location",
-    ["All"] + locations
-)
-
-with col2:
-    selected_cuisine = st.selectbox(
-    "🍽️ Cuisine",
-    ["All"] + cuisines
-)
-
-with col3:
- online_order = st.selectbox(
-    "🛒 Online Order",
-    ["All", "Yes", "No"]
-)
-
-col4, col5 = st.columns(2)
-
-with col4:
-    book_table = st.selectbox(
-    "🪑 Table Booking",
-    ["All", "Yes", "No"]
-)
-
-with col5:
-    min_rating = st.slider(
-    "⭐ Minimum Rating",
-    0.0,
-    5.0,
-    0.0,
-    0.1
-)
-# -----------------------------
-# SQL Query
-# -----------------------------
-
-query = """
-SELECT
-    location,
-    rest_type,
-    cuisines,
-    rate,
-    votes,
-    online_order,
-    book_table,
-    phone,
-    dish_liked
-FROM restaurants
-WHERE 1=1
-"""
-
-params = []
-
-if selected_location != "All":
-    query += " AND location = ?"
-    params.append(selected_location)
-
-if selected_cuisine != "All":
-    query += " AND cuisines LIKE ?"
-    params.append("%" + selected_cuisine + "%")
-
-if online_order != "All":
-    query += " AND online_order = ?"
-    params.append(online_order)
-
-if book_table != "All":
-    query += " AND book_table = ?"
-    params.append(book_table)
-
-if min_rating > 0:
-    query += " AND rate >= ?"
-    params.append(min_rating)
-
-query += " ORDER BY rate DESC"
-
-# -----------------------------
-# Execute query
-# -----------------------------
-
-df = pd.read_sql_query(
-    query,
-    conn,
-    params=params
-)
-
-st.subheader("Filtered Restaurant Data")
-
-st.write(f"Restaurants Found: {len(df):,}")
-
-st.dataframe(
-    df,
-    use_container_width=True,
-    hide_index=True
-)
 
 
 
@@ -441,7 +310,7 @@ fig6.update_layout(
     #template="plotly_white",
     margin=dict(l=50, r=30, t=50, b=30))
 
-st.sidebar.title("Uber Eats Dashboard")
+
 
 #11.Which locations are ideal for premium restaurant onboarding?
 
@@ -892,10 +761,16 @@ fig_o5.update_layout(
     yaxis_title="<b>Total Revenue (₹)</b>"
 )
 
+st.sidebar.title("Uber Eats Dashboard")
 
 
-
-
+home = st.sidebar.selectbox(
+    "Home",
+    [
+        "Select",
+        "Dashboard",
+        "Table Filter",
+    ])
 
 
 restaurant_question = st.sidebar.selectbox(
@@ -926,6 +801,140 @@ order_question = st.sidebar.selectbox(
         "O5 - Highest Revenue Day of Week"
     ]
 )
+if home == "Dashboard":
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Restaurants", f"{total_restaurants:,}")
+    col2.metric("Avg Rating", avg_rating)
+    col3.metric("Avg Cost for Two", f"₹{avg_cost:,.0f}")
+    col4.metric("Locations", total_locations)
+
+    col5, col6, col7, col8 = st.columns(4)
+
+    col5.metric("Total Orders", f"{total_orders:,}")
+    col6.metric("Total Revenue", f"₹{total_revenue:,.0f}")
+    col7.metric("Avg Order Value", f"₹{avg_order_value}")
+    col8.metric("Revenue per Restaurant", f"₹{avg_restaurant_revenue:,.0f}")
+elif home=="Table Filter":
+    st.divider()
+    st.subheader("🔎 Explore Restaurants")
+    st.caption("Results are retrieved dynamically from the SQLite database using SQL filters.")
+    # -----------------------------
+    # Get filter values
+    # -----------------------------
+
+    locations = pd.read_sql_query(
+        "SELECT DISTINCT location FROM restaurants WHERE location IS NOT NULL ORDER BY location",
+        conn
+    )["location"].tolist()
+
+    cuisines = pd.read_sql_query(
+        "SELECT DISTINCT cuisines FROM restaurants WHERE cuisines IS NOT NULL ORDER BY cuisines",
+        conn
+    )["cuisines"].tolist()
+
+    # -----------------------------
+    # Filters
+    # -----------------------------
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        selected_location = st.selectbox(
+        "📍 Location",
+        ["All"] + locations
+    )
+
+    with col2:
+        selected_cuisine = st.selectbox(
+        "🍽️ Cuisine",
+        ["All"] + cuisines
+    )
+
+    with col3:
+     online_order = st.selectbox(
+        "🛒 Online Order",
+        ["All", "Yes", "No"]
+    )
+
+    col4, col5 = st.columns(2)
+
+    with col4:
+        book_table = st.selectbox(
+        "🪑 Table Booking",
+        ["All", "Yes", "No"]
+    )
+
+    with col5:
+        min_rating = st.slider(
+        "⭐ Minimum Rating",
+        0.0,
+        5.0,
+        0.0,
+        0.1
+    )
+
+    # -----------------------------
+    # SQL Query
+    # -----------------------------
+
+    query = """
+    SELECT
+        location,
+        rest_type,
+        cuisines,
+        rate,
+        online_order,
+        book_table,
+        dish_liked
+    FROM restaurants
+    WHERE 1=1
+    """
+
+    params = []
+
+    if selected_location != "All":
+        query += " AND location = ?"
+        params.append(selected_location)
+
+    if selected_cuisine != "All":
+        query += " AND cuisines LIKE ?"
+        params.append("%" + selected_cuisine + "%")
+
+    if online_order != "All":
+        query += " AND online_order = ?"
+        params.append(online_order)
+
+    if book_table != "All":
+        query += " AND book_table = ?"
+        params.append(book_table)
+
+    if min_rating > 0:
+        query += " AND rate >= ?"
+        params.append(min_rating)
+
+    query += " ORDER BY rate DESC"
+
+    # -----------------------------
+    # Execute query
+    # -----------------------------
+
+    df = pd.read_sql_query(
+        query,
+        conn,
+        params=params
+    )
+
+    st.subheader("Filtered Restaurant Data")
+
+    st.write(f"Restaurants Found: {len(df):,}")
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True
+    )
+
 
 
 
@@ -1007,7 +1016,7 @@ elif restaurant_question == "Q4 - Table Booking Impact":
     """)
 
 elif restaurant_question == "Q5 - Best Price Range":
-    st. header("Does table booking correlate with higher customer ratings?")
+    st. header(" What price range delivers the best customer satisfaction? ")
     col1,col2=st.columns([2,3])
     with col1:
         st.dataframe(q5,hide_index=True)
@@ -1232,4 +1241,3 @@ elif order_question == "O5 - Highest Revenue Day of Week":
 
     **Business Value:** Even though the order count on Thursday is high . Revenue generation is high on Monday only.
     """)
-    
